@@ -3,162 +3,191 @@ import pandas as pd
 import joblib
 import shap
 import matplotlib.pyplot as plt
-import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 import os
 
 # ================= PAGE CONFIG =================
-st.set_page_config(
-    page_title="NeuroGuard Elite | Stroke AI",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="NeuroGuard Elite", layout="wide", initial_sidebar_state="collapsed")
 
-# ================= ULTRA-VISIBILITY UI CSS =================
+# ================= DARK MODE VISIBILITY CSS =================
 st.markdown("""
 <style>
-    .stApp { background: radial-gradient(circle at top right, #1e293b, #0f172a); background-attachment: fixed; }
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #ffffff !important; }
-    
-    /* Clinical Info Text Fix */
-    .clinical-text {
+    /* 1. RESTORE DARK GRADIENT BACKGROUND */
+    .stApp {
+        background: radial-gradient(circle at top right, #1e293b, #0f172a);
+        background-attachment: fixed;
+    }
+
+    /* 2. MAKE ALL FORM LABELS PURE WHITE & BOLD */
+    label, .stMarkdown p, .stSelectbox label, .stSlider label {
         color: #ffffff !important;
-        font-size: 1.15rem !important;
-        font-weight: 500 !important;
-        line-height: 1.8 !important;
-        text-shadow: 0px 0px 5px rgba(255,255,255,0.1);
-        background: rgba(255,255,255,0.05);
-        padding: 15px;
-        border-radius: 10px;
+        font-weight: 700 !important;
+        font-size: 1.1rem !important;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
     }
 
-    .css-card {
-        background: rgba(30, 41, 59, 0.85);
-        backdrop-filter: blur(15px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 20px;
+    /* 3. FIX DROPDOWN/INPUT TEXT COLOR (Black text on white boxes) */
+    div[data-baseweb="select"] > div {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+    }
+    input {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+    }
+
+    /* 4. CLINICAL INFO TAB STYLING (The "Different" look) */
+    .clinical-card {
+        background: rgba(255, 255, 255, 0.1);
+        border: 2px solid #38bdf8;
         padding: 25px;
-        margin-bottom: 20px;
+        border-radius: 15px;
+        backdrop-filter: blur(10px);
+    }
+    .clinical-header {
+        color: #38bdf8 !important;
+        font-size: 1.8rem !important;
+        font-weight: 800 !important;
+        margin-bottom: 15px;
+    }
+    .clinical-item {
+        color: #f1f5f9 !important;
+        font-size: 1.2rem !important;
+        line-height: 1.6;
+        margin-bottom: 10px;
+        border-left: 3px solid #38bdf8;
+        padding-left: 15px;
     }
 
-    h1 { background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 900 !important; font-size: 3.5rem !important; }
-    h3 { color: #38bdf8 !important; font-weight: 800 !important; text-transform: uppercase; }
+    /* 5. TITLES */
+    h1 {
+        background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 900 !important;
+        font-size: 4rem !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# ================= LOAD MODEL =================
+# ================= FAST AI ENGINE (CACHED) =================
 @st.cache_resource
-def load_model():
-    try:
-        model_path = "model.pkl"
-        if os.path.exists(model_path):
-            return joblib.load(model_path)
-    except Exception as e:
-        st.error(f"Critical: Model Loading Failed. {e}")
-    return None
+def load_assets():
+    model = joblib.load("model.pkl")
+    # Pre-loading the explainer to save time during diagnosis
+    explainer = shap.TreeExplainer(model)
+    return model, explainer
 
-model = load_model()
+try:
+    model, explainer = load_assets()
+except Exception as e:
+    st.error(f"Error loading AI assets: {e}")
+    model, explainer = None, None
 
 # ================= HEADER =================
 st.markdown("<h1>NeuroGuard Elite</h1>", unsafe_allow_html=True)
-tabs = st.tabs(["⚡ Prediction", "📘 Clinical Info", "🧠 AI Analysis", "📈 Metrics"])
+st.markdown("<p style='color:#94a3b8; font-size:1.2rem; margin-top:-20px;'>Advanced Stroke Risk Assessment System</p>", unsafe_allow_html=True)
 
-# ================= TAB 1: PREDICTION =================
+tabs = st.tabs(["⚡ Diagnosis Dashboard", "📘 Clinical Intelligence", "🧠 AI Interpretation"])
+
+# ================= TAB 1: DIAGNOSIS =================
 with tabs[0]:
-    col_input, col_action = st.columns([3, 2], gap="large")
-    with col_input:
-        st.markdown('<div class="css-card"><h3>👤 Patient Profile</h3>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        gender = c1.selectbox("Gender", ["Male", "Female", "Other"])
-        age = c2.slider("Age", 0, 100, 45)
-        residence = c3.selectbox("Residence", ["Urban", "Rural"])
+    col1, col2 = st.columns([2, 1.2], gap="large")
+    
+    with col1:
+        st.markdown("<h3 style='color:#38bdf8;'>Patient Vitals</h3>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        gender = c1.selectbox("Gender Selection", ["Male", "Female", "Other"])
+        age = c2.slider("Age of Patient", 0, 100, 50)
         
-        c4, c5 = st.columns(2)
-        work_type = c4.selectbox("Work Type", ["Private", "Self-employed", "Govt_job", "children", "Never_worked"])
-        ever_married = c5.selectbox("Married", ["Yes", "No"])
+        c3, c4 = st.columns(2)
+        glucose = c3.number_input("Avg Glucose Level (mg/dL)", 50.0, 300.0, 100.0)
+        bmi = c4.number_input("Body Mass Index (BMI)", 10.0, 60.0, 25.0)
         
-        m1, m2, m3 = st.columns(3)
-        glucose = m1.number_input("Glucose (mg/dL)", 40.0, 300.0, 85.0)
-        bmi = m2.number_input("BMI", 10.0, 60.0, 24.5)
-        smoking = m3.selectbox("Smoking Status", ["formerly smoked", "never smoked", "smokes", "Unknown"])
-        
-        hypertension = st.radio("Hypertension", [0, 1], format_func=lambda x: "Yes" if x==1 else "No", horizontal=True)
-        heart_disease = st.radio("Heart Disease", [0, 1], format_func=lambda x: "Yes" if x==1 else "No", horizontal=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        c5, c6 = st.columns(2)
+        smoking = c5.selectbox("Smoking History", ["never smoked", "formerly smoked", "smokes", "Unknown"])
+        work = c6.selectbox("Employment Type", ["Private", "Self-employed", "Govt_job", "children", "Never_worked"])
 
-    with col_action:
-        predict_btn = st.button("RUN AI DIAGNOSIS", use_container_width=True)
+        c7, c8 = st.columns(2)
+        hypertension = c7.radio("Chronic Hypertension?", [0, 1], format_func=lambda x: "Yes" if x==1 else "No", horizontal=True)
+        heart_disease = c8.radio("Known Heart Disease?", [0, 1], format_func=lambda x: "Yes" if x==1 else "No", horizontal=True)
         
-        if predict_btn:
-            if model:
-                try:
-                    # MATCH DATA ORDER TO MODEL REQUIREMENTS
-                    input_data = pd.DataFrame({
-                        "gender": [gender], "age": [age], "hypertension": [hypertension],
-                        "heart_disease": [heart_disease], "ever_married": [ever_married],
-                        "work_type": [work_type], "Residence_type": [residence],
-                        "avg_glucose_level": [glucose], "bmi": [bmi], "smoking_status": [smoking]
-                    })
-                    
-                    # RUN PREDICTION
-                    proba = model.predict_proba(input_data)[0][1] * 100
-                    st.session_state.last_result = proba
-                    st.session_state.last_input = input_data
-                    
-                    color = "#10b981" if proba < 25 else "#f59e0b" if proba < 65 else "#ef4444"
-                    
-                    fig = go.Figure(go.Indicator(
-                        mode="gauge+number", value=proba, number={'suffix': "%", 'font': {'color': color, 'size': 50}},
-                        gauge={'axis': {'range': [0, 100]}, 'bar': {'color': color}}
-                    ))
-                    fig.update_layout(height=300, paper_bgcolor='rgba(0,0,0,0)', font={'color': "#fff"})
-                    
-                    st.markdown(f'<div class="css-card" style="border: 2px solid {color}; text-align: center;">', unsafe_allow_html=True)
-                    st.plotly_chart(fig, use_container_width=True)
-                    st.markdown(f'<h2 style="color:{color}">RISK LEVEL: {"LOW" if proba < 25 else "HIGH"}</h2></div>', unsafe_allow_html=True)
-                
-                except Exception as e:
-                    st.error(f"❌ Prediction Engine Error: {e}")
-                    st.info("Check if your model expects these exact column names.")
-            else:
-                st.warning("Model file not found. Please upload model.pkl to GitHub.")
+        residence = st.selectbox("Residence Environment", ["Urban", "Rural"])
+        married = st.selectbox("Marital Status (Ever Married)", ["Yes", "No"])
 
-# ================= TAB 2: CLINICAL INFO (FIXED VISIBILITY) =================
+    with col2:
+        st.markdown("<h3 style='color:#38bdf8; text-align:center;'>Risk Result</h3>", unsafe_allow_html=True)
+        predict_btn = st.button("EXECUTE AI DIAGNOSIS", use_container_width=True, type="primary")
+        
+        if predict_btn and model:
+            input_df = pd.DataFrame({
+                "gender": [gender], "age": [age], "hypertension": [hypertension],
+                "heart_disease": [heart_disease], "ever_married": [married],
+                "work_type": [work], "Residence_type": [residence],
+                "avg_glucose_level": [glucose], "bmi": [bmi], "smoking_status": [smoking]
+            })
+            
+            # Prediction
+            proba = model.predict_proba(input_df)[0][1] * 100
+            st.session_state['input_data'] = input_df
+            
+            # Result Color
+            res_color = "#22c55e" if proba < 30 else "#eab308" if proba < 70 else "#ef4444"
+            
+            fig = go.Figure(go.Indicator(
+                mode = "gauge+number",
+                value = proba,
+                number = {'suffix': "%", 'font': {'color': 'white'}},
+                gauge = {
+                    'axis': {'range': [0, 100], 'tickcolor': "white"},
+                    'bar': {'color': res_color},
+                    'steps': [
+                        {'range': [0, 30], 'color': "rgba(34, 197, 94, 0.2)"},
+                        {'range': [30, 70], 'color': "rgba(234, 179, 8, 0.2)"},
+                        {'range': [70, 100], 'color': "rgba(239, 68, 68, 0.2)"}]
+                }
+            ))
+            fig.update_layout(height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown(f"<div style='text-align:center; padding:15px; border-radius:10px; background:{res_color}; color:white; font-weight:900; font-size:1.5rem;'>{ 'CRITICAL RISK' if proba > 70 else 'ELEVATED RISK' if proba > 30 else 'LOW RISK'}</div>", unsafe_allow_html=True)
+
+# ================= TAB 2: CLINICAL INTEL (DIFFERENT LOOK) =================
 with tabs[1]:
-    st.markdown('<div class="css-card">', unsafe_allow_html=True)
-    st.markdown("### 📘 Clinical Guidelines")
-    st.markdown("""
-    <div class="clinical-text">
-    <b>What is a Stroke?</b><br>
-    A medical emergency where blood flow to the brain is restricted. 
-    Immediate intervention is critical for survival and recovery.<br><br>
-    <b>Key Risk Factors:</b><br>
-    • <b>Hypertension:</b> The leading cause of stroke.<br>
-    • <b>Diabetes:</b> High blood sugar damages blood vessels over time.<br>
-    • <b>Lifestyle:</b> Smoking and high BMI significantly increase arterial stress.
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("<div class='clinical-card'>", unsafe_allow_html=True)
+    st.markdown("<div class='clinical-header'>📘 Medical Guidelines & Risks</div>", unsafe_allow_html=True)
+    
+    st.markdown("<div class='clinical-item'><b>B.E. F.A.S.T Protocol:</b> Essential for early stroke detection. Check Balance, Eyes, Face, Arms, Speech, and Time.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='clinical-item'><b>Hypertension:</b> The primary contributor to arterial damage. Values consistently over 140/90 mmHg require clinical review.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='clinical-item'><b>Glucose Management:</b> Average glucose levels above 200 mg/dL can double the risk of ischemic stroke.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='clinical-item'><b>BMI & Physicality:</b> A BMI > 30 is often associated with obstructive sleep apnea, a hidden stroke risk factor.</div>", unsafe_allow_html=True)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# ================= TAB 3: AI ANALYSIS =================
+# ================= TAB 3: AI ANALYSIS (SHAP OPTIMIZED) =================
 with tabs[2]:
-    if "last_result" in st.session_state and model:
-        st.markdown('<div class="css-card"><h3>🧠 Feature Contribution (SHAP)</h3>', unsafe_allow_html=True)
-        try:
-            # SHAP logic here (Ensure explainer matches your model type)
-            st.write("SHAP Analysis is calculating...")
-            # (Simplified for stability)
-            st.info("SHAP visualization requires consistent feature naming with the training set.")
-        except:
-            st.error("Could not generate SHAP values.")
-        st.markdown('</div>', unsafe_allow_html=True)
-    else:
-        st.info("Run a diagnosis first to see AI Analysis.")
+    st.markdown("<h3 style='color:#38bdf8;'>Neural Path Analysis</h3>", unsafe_allow_html=True)
+    if 'input_data' in st.session_state:
+        with st.spinner("Decoding AI logic..."):
+            # SHAP Interpretation
+            shap_values = explainer.shap_values(st.session_state['input_data'])
+            
+            # Adjusting for model output type
+            val = shap_values[1] if isinstance(shap_values, list) else shap_values
 
-# ================= TAB 4: METRICS =================
-with tabs[3]:
-    st.markdown('<div class="css-card"><h3>📈 Health Metrics Comparison</h3>', unsafe_allow_html=True)
-    st.write("Average stats vs Patient stats")
-    # Add charts here
-    st.markdown('</div>', unsafe_allow_html=True)
+            fig, ax = plt.subplots(figsize=(10, 5))
+            plt.style.use('dark_background')
+            fig.patch.set_facecolor('#0f172a')
+            
+            shap.waterfall_plot(shap.Explanation(
+                values=val[0], 
+                base_values=explainer.expected_value[1], 
+                data=st.session_state['input_data'].iloc[0],
+                feature_names=st.session_state['input_data'].columns
+            ), show=False)
+            
+            st.pyplot(fig)
+            st.markdown("<p style='text-align:center; color:#94a3b8;'>Red bars show factors increasing risk, Blue bars show factors decreasing it.</p>", unsafe_allow_html=True)
+    else:
+        st.info("Run a diagnosis in the first tab to unlock this analysis.")
