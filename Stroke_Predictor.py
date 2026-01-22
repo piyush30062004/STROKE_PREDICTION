@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import shap
-import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import numpy as np
 import os
@@ -25,13 +23,14 @@ st.markdown("""
         text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
     }
 
-    /* Clinical Intelligence Styling */
+    /* Clinical & Plan Card Styling */
     .clinical-card {
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(56, 189, 248, 0.3);
         padding: 25px;
         border-radius: 15px;
         backdrop-filter: blur(10px);
+        margin-bottom: 20px;
     }
     .clinical-header {
         color: #38bdf8 !important;
@@ -40,21 +39,21 @@ st.markdown("""
         margin-bottom: 20px;
         border-bottom: 1px solid #38bdf8;
     }
-    .clinical-section {
-        margin-bottom: 25px;
-        padding-left: 15px;
-        border-left: 3px solid #818cf8;
-    }
-    .section-title {
-        color: #818cf8 !important;
-        font-weight: 800 !important;
-        font-size: 1.3rem !important;
-        text-transform: uppercase;
-    }
-    .section-content {
+    .plan-item {
+        background: rgba(56, 189, 248, 0.1);
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        border-left: 5px solid #38bdf8;
         color: #e2e8f0 !important;
-        font-size: 1.1rem !important;
-        line-height: 1.7;
+    }
+    .critical-item {
+        background: rgba(239, 68, 68, 0.1);
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        border-left: 5px solid #ef4444;
+        color: #fca5a5 !important;
     }
 
     h1 {
@@ -67,36 +66,21 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ================= FIXED AI ENGINE (PIPELINE & CATEGORICAL COMPATIBLE) =================
+# ================= LOAD MODEL =================
 @st.cache_resource
-def load_assets():
-    model = joblib.load("model.pkl")
-    
-    # Logic to fix AI Diagnosis: 
-    # We create a wrapper that handles the text-to-number conversion for SHAP
-    def model_predict(data):
-        # Convert incoming numpy/df to the format the model expects
-        df = pd.DataFrame(data, columns=[
-            "gender", "age", "hypertension", "heart_disease", "ever_married",
-            "work_type", "Residence_type", "avg_glucose_level", "bmi", "smoking_status"
-        ])
-        return model.predict_proba(df)[:, 1]
+def load_model():
+    try:
+        return joblib.load("model.pkl")
+    except Exception as e:
+        st.error(f"Model Load Error: {e}")
+        return None
 
-    # Create a generic explainer that works on the prediction function
-    # This avoids "Pipeline" and "String" errors
-    explainer = shap.Explainer(model_predict, shap.maskers.Independent(data=np.zeros((1, 10))))
-    return model, explainer
-
-try:
-    model, explainer = load_assets()
-except Exception as e:
-    st.error(f"AI Engine Syncing Error: {e}")
-    model, explainer = None, None
+model = load_model()
 
 # ================= HEADER =================
 st.markdown("<h1>NeuroGuard Elite</h1>", unsafe_allow_html=True)
 
-tabs = st.tabs(["⚡ Diagnosis Dashboard", "📘 Clinical Intelligence", "🧠 AI Interpretation"])
+tabs = st.tabs(["⚡ Diagnosis Dashboard", "📘 Clinical Intelligence", "🛡️ Personalized Prevention Plan"])
 
 # ================= TAB 1: DIAGNOSIS =================
 with tabs[0]:
@@ -159,104 +143,50 @@ with tabs[0]:
             
             st.markdown(f"<div style='text-align:center; padding:15px; border-radius:10px; background:{res_color}; color:white; font-weight:900; font-size:1.5rem;'>{risk_label}</div>", unsafe_allow_html=True)
 
-            # --- NEW DOWNLOAD BUTTON ---
-            st.markdown("<br>", unsafe_allow_html=True)
-            report_text = f"""NeuroGuard Elite - Stroke Risk Report
---------------------------------------
-PATIENT PROFILE:
-Age: {age}
-Gender: {gender}
-BMI: {bmi}
-Avg Glucose: {glucose} mg/dL
-Hypertension: {'Yes' if hypertension == 1 else 'No'}
-Heart Disease: {'Yes' if heart_disease == 1 else 'No'}
-Smoking Status: {smoking}
+            # --- DOWNLOAD BUTTON ---
+            report_text = f"NeuroGuard Elite Report\nAge: {age}\nRisk: {proba:.2f}%\nStatus: {risk_label}"
+            st.download_button("📥 Download Report", report_text, f"Report_{age}.txt", use_container_width=True)
 
-DIAGNOSIS RESULT:
-Risk Score: {proba:.2f}%
-Classification: {risk_label}
---------------------------------------
-Disclaimer: This is an AI-generated assessment and should be 
-validated by a medical professional.
-"""
-            st.download_button(
-                label="📥 Download Clinical Report",
-                data=report_text,
-                file_name=f"Stroke_Report_{age}_{gender}.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-
-# ================= TAB 2: CLINICAL INTEL (DETAILED) =================
+# ================= TAB 2: CLINICAL INTEL =================
 with tabs[1]:
     st.markdown("<div class='clinical-card'>", unsafe_allow_html=True)
     st.markdown("<div class='clinical-header'>Clinical Intelligence & Risk Protocols</div>", unsafe_allow_html=True)
-    
-    # Section 1
-    st.markdown("""<div class='clinical-section'>
-        <div class='section-title'>1. Acute Stroke Identification (B.E. F.A.S.T.)</div>
-        <div class='section-content'>
-            Stroke is a time-critical medical emergency. Use the BE-FAST protocol:<br>
-            • <b>Balance:</b> Watch for sudden loss of coordination.<br>
-            • <b>Eyes:</b> Check for sudden blurred or double vision.<br>
-            • <b>Face:</b> Ask the patient to smile; look for facial drooping.<br>
-            • <b>Arms:</b> Ask them to raise both arms; check if one drifts downward.<br>
-            • <b>Speech:</b> Listen for slurring or difficulty repeating simple phrases.<br>
-            • <b>Time:</b> If any signs are present, call emergency services immediately.
-        </div>
-    </div>""", unsafe_allow_html=True)
-    
-    # Section 2
-    st.markdown("""<div class='clinical-section'>
-        <div class='section-title'>2. Hypertension & Vascular Resistance</div>
-        <div class='section-content'>
-            Chronic high blood pressure is the primary contributor to ischemic strokes. 
-            Hypertension weakens the arterial walls over time, leading to either blockage 
-            (clot) or rupture (hemorrhage). Standard clinical target is below 130/80 mmHg.
-        </div>
-    </div>""", unsafe_allow_html=True)
-    
-    # Section 3
-    st.markdown("""<div class='clinical-section'>
-        <div class='section-title'>3. Metabolic Biomarkers (Glucose & BMI)</div>
-        <div class='section-content'>
-            • <b>Glucose:</b> Patients with Diabetes are 1.5 times more likely to have a stroke. 
-            Hyperglycemia causes inflammation and arterial plaque buildup.<br>
-            • <b>BMI:</b> High Body Mass Index is often correlated with Sleep Apnea and High 
-            Cholesterol, both of which are secondary drivers of cerebrovascular disease.
-        </div>
-    </div>""", unsafe_allow_html=True)
-    
+    st.markdown("<p style='font-size:1.1rem;'><b>B.E. F.A.S.T Protocol:</b> Balance, Eyes, Face, Arms, Speech, Time.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:1.1rem;'><b>Hypertension:</b> Primary contributor to arterial damage. Target < 130/80 mmHg.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:1.1rem;'><b>Glucose:</b> Levels > 140 mg/dL lead to arterial inflammation.</p>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ================= TAB 3: AI ANALYSIS (FIXED SHAP) =================
+# ================= TAB 3: UNIQUE FEATURE - PREVENTION PLAN =================
 with tabs[2]:
-    st.markdown("<h3 style='color:#38bdf8;'>AI Feature Contribution</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color:#38bdf8;'>🛡️ Personalized Prevention Roadmap</h3>", unsafe_allow_html=True)
+    
     if 'input_data' in st.session_state:
-        with st.spinner("Analyzing neural pathways..."):
-            try:
-                # Prepare data for SHAP: convert cats to numbers so math doesn't fail
-                data_for_shap = st.session_state['input_data'].copy()
-                for col in data_for_shap.select_dtypes(include=['object']).columns:
-                    data_for_shap[col] = pd.Categorical(data_for_shap[col]).codes
-                
-                # Use the explainer we built in load_assets
-                shap_values = explainer(data_for_shap.values)
-                
-                fig, ax = plt.subplots(figsize=(10, 5))
-                plt.style.use('dark_background')
-                fig.patch.set_facecolor('#0f172a')
-                
-                # Visualizing the importance
-                shap.plots.bar(shap_values[0], show=False)
-                
-                # Improve text visibility on plot
-                plt.gcf().axes[0].tick_params(colors='white')
-                
-                st.pyplot(fig)
-                st.markdown("<p style='text-align:center; color:#94a3b8;'>Features with longer bars had the highest influence on this specific patient's risk score.</p>", unsafe_allow_html=True)
-            except Exception as e:
-                st.error(f"SHAP Visualization Error: {e}")
-                st.info("Technical Note: The SHAP explainer requires numeric input to calculate feature importance.")
+        p_data = st.session_state['input_data'].iloc[0]
+        p_risk = st.session_state['proba']
+        
+        st.markdown("<div class='clinical-card'>", unsafe_allow_html=True)
+        
+        # 1. Immediate Risk-Based Action
+        if p_risk > 50:
+            st.markdown("<div class='critical-item'>⚠️ <b>HIGH RISK DETECTED:</b> Schedule a carotid ultrasound and consultation with a neurologist within 7 days.</div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div class='plan-item'>✅ <b>MAINTENANCE MODE:</b> Continue routine screenings every 6 months.</div>", unsafe_allow_html=True)
+
+        # 2. Dynamic Lifestyle Prescriptions
+        st.markdown("<h4 style='color:white;'>Targeted Interventions:</h4>", unsafe_allow_html=True)
+        
+        if p_data['avg_glucose_level'] > 120:
+            st.markdown("<div class='plan-item'>🩸 <b>Glycemic Control:</b> Your glucose is elevated. Reduce refined sugar intake and monitor A1C levels.</div>", unsafe_allow_html=True)
+        
+        if p_data['bmi'] > 28:
+            st.markdown("<div class='plan-item'>⚖️ <b>Weight Management:</b> Reducing BMI by just 5% can lower stroke risk by nearly 20%. Consider a low-sodium Mediterranean diet.</div>", unsafe_allow_യിrue)
+            
+        if p_data['smoking_status'] in ['smokes', 'formerly smoked']:
+            st.markdown("<div class='plan-item'>🚭 <b>Arterial Health:</b> Nicotine thickens blood. Complete cessation is the single most effective way to prevent clot formation.</div>", unsafe_allow_html=True)
+        
+        if p_data['hypertension'] == 1:
+            st.markdown("<div class='plan-item'>❤️ <b>Pressure Monitoring:</b> Since you have hypertension, daily logging of BP is mandatory. Limit salt to < 1,500mg/day.</div>", unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
     else:
-        st.info("Complete a Diagnosis Dashboard session first to see the AI breakdown.")
+        st.info("Please run a diagnosis first to generate your custom prevention plan.")
