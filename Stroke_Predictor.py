@@ -67,12 +67,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ================= FIXED AI ENGINE (COMPATIBLE WITH PIPELINES) =================
+# ================= FIXED AI ENGINE (PIPELINE & CATEGORICAL COMPATIBLE) =================
 @st.cache_resource
 def load_assets():
     model = joblib.load("model.pkl")
-    # Using the generic Explainer to handle Pipeline objects automatically
-    explainer = shap.Explainer(model.predict, shap.maskers.Independent(data=np.zeros((1, 10))))
+    
+    # Logic to fix AI Diagnosis: 
+    # We create a wrapper that handles the text-to-number conversion for SHAP
+    def model_predict(data):
+        # Convert incoming numpy/df to the format the model expects
+        df = pd.DataFrame(data, columns=[
+            "gender", "age", "hypertension", "heart_disease", "ever_married",
+            "work_type", "Residence_type", "avg_glucose_level", "bmi", "smoking_status"
+        ])
+        return model.predict_proba(df)[:, 1]
+
+    # Create a generic explainer that works on the prediction function
+    # This avoids "Pipeline" and "String" errors
+    explainer = shap.Explainer(model_predict, shap.maskers.Independent(data=np.zeros((1, 10))))
     return model, explainer
 
 try:
@@ -125,8 +137,10 @@ with tabs[0]:
             
             proba = model.predict_proba(input_df)[0][1] * 100
             st.session_state['input_data'] = input_df
+            st.session_state['proba'] = proba
             
             res_color = "#22c55e" if proba < 30 else "#eab308" if proba < 70 else "#ef4444"
+            risk_label = 'CRITICAL RISK' if proba > 70 else 'ELEVATED RISK' if proba > 30 else 'LOW RISK'
             
             fig = go.Figure(go.Indicator(
                 mode = "gauge+number", value = proba,
@@ -143,7 +157,35 @@ with tabs[0]:
             fig.update_layout(height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig, use_container_width=True)
             
-            st.markdown(f"<div style='text-align:center; padding:15px; border-radius:10px; background:{res_color}; color:white; font-weight:900; font-size:1.5rem;'>{ 'CRITICAL RISK' if proba > 70 else 'ELEVATED RISK' if proba > 30 else 'LOW RISK'}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:center; padding:15px; border-radius:10px; background:{res_color}; color:white; font-weight:900; font-size:1.5rem;'>{risk_label}</div>", unsafe_allow_html=True)
+
+            # --- NEW DOWNLOAD BUTTON ---
+            st.markdown("<br>", unsafe_allow_html=True)
+            report_text = f"""NeuroGuard Elite - Stroke Risk Report
+--------------------------------------
+PATIENT PROFILE:
+Age: {age}
+Gender: {gender}
+BMI: {bmi}
+Avg Glucose: {glucose} mg/dL
+Hypertension: {'Yes' if hypertension == 1 else 'No'}
+Heart Disease: {'Yes' if heart_disease == 1 else 'No'}
+Smoking Status: {smoking}
+
+DIAGNOSIS RESULT:
+Risk Score: {proba:.2f}%
+Classification: {risk_label}
+--------------------------------------
+Disclaimer: This is an AI-generated assessment and should be 
+validated by a medical professional.
+"""
+            st.download_button(
+                label="📥 Download Clinical Report",
+                data=report_text,
+                file_name=f"Stroke_Report_{age}_{gender}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
 
 # ================= TAB 2: CLINICAL INTEL (DETAILED) =================
 with tabs[1]:
@@ -187,24 +229,34 @@ with tabs[1]:
     
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ================= TAB 3: AI ANALYSIS (COMPATIBLE SHAP) =================
+# ================= TAB 3: AI ANALYSIS (FIXED SHAP) =================
 with tabs[2]:
     st.markdown("<h3 style='color:#38bdf8;'>AI Feature Contribution</h3>", unsafe_allow_html=True)
     if 'input_data' in st.session_state:
         with st.spinner("Analyzing neural pathways..."):
             try:
-                # Optimized SHAP for Pipelines
-                shap_values = explainer(st.session_state['input_data'])
+                # Prepare data for SHAP: convert cats to numbers so math doesn't fail
+                data_for_shap = st.session_state['input_data'].copy()
+                for col in data_for_shap.select_dtypes(include=['object']).columns:
+                    data_for_shap[col] = pd.Categorical(data_for_shap[col]).codes
+                
+                # Use the explainer we built in load_assets
+                shap_values = explainer(data_for_shap.values)
                 
                 fig, ax = plt.subplots(figsize=(10, 5))
                 plt.style.use('dark_background')
                 fig.patch.set_facecolor('#0f172a')
                 
+                # Visualizing the importance
                 shap.plots.bar(shap_values[0], show=False)
+                
+                # Improve text visibility on plot
+                plt.gcf().axes[0].tick_params(colors='white')
+                
                 st.pyplot(fig)
                 st.markdown("<p style='text-align:center; color:#94a3b8;'>Features with longer bars had the highest influence on this specific patient's risk score.</p>", unsafe_allow_html=True)
             except Exception as e:
                 st.error(f"SHAP Visualization Error: {e}")
-                st.info("The AI interpretation requires the input data to match the model's training format exactly.")
+                st.info("Technical Note: The SHAP explainer requires numeric input to calculate feature importance.")
     else:
         st.info("Complete a Diagnosis Dashboard session first to see the AI breakdown.")
