@@ -119,6 +119,7 @@ with tabs[0]:
                 "avg_glucose_level": [glucose], "bmi": [bmi], "smoking_status": [smoking]
             })
             
+            # Predict Probability
             proba = model.predict_proba(input_df)[0][1] * 100
             st.session_state['input_data'] = input_df
             st.session_state['proba'] = proba
@@ -144,8 +145,9 @@ with tabs[0]:
             st.markdown(f"<div style='text-align:center; padding:15px; border-radius:10px; background:{res_color}; color:white; font-weight:900; font-size:1.5rem;'>{risk_label}</div>", unsafe_allow_html=True)
 
             # --- DOWNLOAD BUTTON ---
-            report_text = f"NeuroGuard Elite Report\nAge: {age}\nRisk: {proba:.2f}%\nStatus: {risk_label}"
-            st.download_button("📥 Download Report", report_text, f"Report_{age}.txt", use_container_width=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+            report_text = f"NeuroGuard Elite Report\nAge: {age}\nRisk Score: {proba:.2f}%\nDiagnosis: {risk_label}\nBMI: {bmi}\nGlucose: {glucose}"
+            st.download_button("📥 Download Report", report_text, f"Stroke_Report_{age}.txt", use_container_width=True)
 
 # ================= TAB 2: CLINICAL INTEL =================
 with tabs[1]:
@@ -179,7 +181,8 @@ with tabs[2]:
             st.markdown("<div class='plan-item'>🩸 <b>Glycemic Control:</b> Your glucose is elevated. Reduce refined sugar intake and monitor A1C levels.</div>", unsafe_allow_html=True)
         
         if p_data['bmi'] > 28:
-            st.markdown("<div class='plan-item'>⚖️ <b>Weight Management:</b> Reducing BMI by just 5% can lower stroke risk by nearly 20%. Consider a low-sodium Mediterranean diet.</div>", unsafe_allow_യിrue)
+            # FIX: Corrected typo 'unsafe_allow_യിrue' to 'unsafe_allow_html=True'
+            st.markdown("<div class='plan-item'>⚖️ <b>Weight Management:</b> Reducing BMI by just 5% can lower stroke risk by nearly 20%. Consider a low-sodium Mediterranean diet.</div>", unsafe_allow_html=True)
             
         if p_data['smoking_status'] in ['smokes', 'formerly smoked']:
             st.markdown("<div class='plan-item'>🚭 <b>Arterial Health:</b> Nicotine thickens blood. Complete cessation is the single most effective way to prevent clot formation.</div>", unsafe_allow_html=True)
